@@ -27,20 +27,21 @@ class PDFExtractor:
         api_key = os.getenv('OPENAI_API_KEY')  # Load OpenAI API key from environment variables
         self.client = OpenAI(api_key=api_key)  # Initialize OpenAI client
 
-    def extract_text_from_pdf(self, pdf_path: str, page: str = 'first') -> str:
+    def extract_text_from_pdf(self, pdf_path: str, mode: str = 'first') -> str:
         """
-        Extract text from a specified page of a PDF file.
+        Extract text from a specified page or the entire PDF file.
 
         :param pdf_path: Path to the PDF file.
-        :param page: Specify 'first' or 'last' to extract text from the first or last page.
-        :return: Extracted text from the specified page of the PDF.
+        :param mode: Specify 'first' to extract text from the first page or 'all' to extract text from the entire PDF.
+        :return: Extracted text from the specified page or the entire PDF.
         """
         text = ''
         with fitz.open(pdf_path) as doc:  # Open the PDF file
-            if page == 'first' and len(doc) > 0:  # Extract text from the first page
+            if mode == 'first' and len(doc) > 0:  # Extract text from the first page
                 text = doc[0].get_text()
-            elif page == 'last' and len(doc) > 0:  # Extract text from the last page
-                text = doc[-1].get_text()
+            elif mode == 'all':  # Extract text from the entire PDF
+                for page_num in range(len(doc)):
+                    text += doc[page_num].get_text()
         return text
 
     def extract_info_with_gpt(self, text: str, info_type: str) -> str:
@@ -150,13 +151,43 @@ class PDFExtractor:
 
         return text_from_refs[:end_pos].strip()
 
-    def extract_fields(self, text_first: str, text: str, num_pages: int) -> Dict[str, str]:
+    def extract_references_with_gpt(self, text: str) -> str:
+        """
+        Use GPT-4o-mini to extract the references section from the text.
+
+        :param text: Full text of the PDF.
+        :return: Extracted references section.
+        """
+        try:
+            prompt = (
+                "Extract the bibliographic references from the following text and do not include any explanation:\n\n"
+                f"{text}"
+            )
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=16384,
+                temperature=0.5
+            )
+            # Extract the response text
+            references = response.choices[0].message.content.strip()
+            return references
+        except Exception as e:
+            print(f"Error extracting references with GPT-4o-mini: {e}")
+            return "References extraction failed"
+
+    def extract_fields(self, text_first: str, text: str, num_pages: int,
+                       use_gpt_for_references: bool = False) -> Dict[str, str]:
         """
         Extract specific fields from the text of a PDF.
 
         :param text_first: Text extracted from the first page of a PDF.
         :param text: Full text of the PDF.
         :param num_pages: Total number of pages in the PDF.
+        :param use_gpt_for_references: Flag to determine whether to use GPT for extracting references.
         :return: Dictionary of extracted fields.
         """
         # Generate an internal ID
@@ -214,7 +245,10 @@ class PDFExtractor:
         # Extract start page, end page, and references using alternative methods
         start_page = 1  # Assuming the first page is the start page
         end_page = num_pages  # Total number of pages is the end page
-        references = self.extract_references(text)
+        if use_gpt_for_references:
+            references = self.extract_references_with_gpt(text)
+        else:
+            references = self.extract_references(text)
 
         # Get citation count using Google Scholar
         citation_count = self.get_citation_count(doi)
@@ -257,30 +291,22 @@ class PDFExtractor:
         }
         return fields
 
-    def process_pdfs_in_folder(self) -> List[Dict[str, str]]:
+    def process_pdfs_in_folder(self, use_gpt_for_references: bool = False) -> List[Dict[str, str]]:
         """
         Process all PDF files in the specified folder and extract data.
 
+        :param use_gpt_for_references: Flag to determine whether to use GPT for extracting references.
         :return: List of dictionaries containing extracted data from each PDF.
         """
         data = []
         for filename in os.listdir(self.folder_path):  # Iterate through all files in the folder
             if filename.endswith('.pdf'):  # Check if the file is a PDF
                 pdf_path = os.path.join(self.folder_path, filename)  # Get the full path of the PDF
-                text_first = self.extract_text_from_pdf(pdf_path, page='first')  # Extract text from the first page
-
-                # Extract full text from all pages
-                full_text = ''
-                with fitz.open(pdf_path) as doc:  # Open the PDF file
-                    num_pages = len(doc)  # Get the number of pages in the PDF
-                    for page_num in range(num_pages):  # Iterate through all pages
-                        full_text += doc[page_num].get_text()  # Extract text from each page
-
-                # Save full text only if enabled
-                if self.save_full_text_enabled:
-                    self.save_full_text(full_text, filename)  # Save the full text to a file
-
-                fields = self.extract_fields(text_first, full_text, num_pages)  # Extract fields from the text
+                text_first = self.extract_text_from_pdf(pdf_path, mode='first')  # Extract text from the first page
+                full_text = self.extract_text_from_pdf(pdf_path, mode='all')  # Extract text from the entire PDF
+                fields = self.extract_fields(
+                    text_first, full_text, len(full_text.split('\n')), use_gpt_for_references
+                )  # Extract fields from the text
                 data.append(fields)  # Append the extracted fields to the data list
         return data
 
@@ -294,24 +320,13 @@ class PDFExtractor:
         with open(self.output_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)  # Save the data to a JSON file
 
-    def save_full_text(self, text: str, pdf_filename: str):
-        """
-        Save the full text of a PDF to a text file in the output directory.
-
-        :param text: Full text content to save
-        :param pdf_filename: Original PDF filename to base the text filename on
-        """
-        text_filename = os.path.splitext(pdf_filename)[0] + '.txt'  # Create a text filename based on the PDF filename
-        text_filepath = os.path.join(os.path.dirname(self.output_file), text_filename)  # Get the full path of txt file
-
-        with open(text_filepath, 'w', encoding='utf-8') as f:
-            f.write(text)  # Write the full text to the file
-
-    def run(self):
+    def run(self, use_gpt_for_references: bool = False):
         """
         Run the PDF extraction process and save the results to a JSON file.
+
+        :param use_gpt_for_references: Flag to determine whether to use GPT for extracting references.
         """
-        data = self.process_pdfs_in_folder()  # Process all PDFs in the folder and extract data
+        data = self.process_pdfs_in_folder(use_gpt_for_references)  # Process all PDFs in the folder and extract data
         self.save_to_json(data)  # Save the extracted data to a JSON file
         print(f"Data extracted and saved to {self.output_file}")  # Print a message indicating the data has been saved
 
@@ -320,4 +335,5 @@ if __name__ == "__main__":
     folder_path = 'data/input'  # Path to the folder containing PDFs
     output_file = 'data/output/extracted_data.json'  # Path to save the JSON file
     extractor = PDFExtractor(folder_path, output_file)  # Initialize the PDFExtractor
-    extractor.run()  # Run the PDF extraction process
+    # Run the PDF extraction process and choose the flag to use GPT for extracting references or not
+    extractor.run(use_gpt_for_references=False)
