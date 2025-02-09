@@ -1,5 +1,5 @@
 import os  # Import os for file path operations
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF for PDF text extraction
 from typing import List, Dict  # Import List and Dict for type hinting
 from openai import OpenAI  # Import OpenAI for API calls
 from dotenv import load_dotenv  # Import dotenv for environment variable loading
@@ -24,8 +24,8 @@ class PDFExtractor:
         self.folder_path = folder_path
         self.output_file = output_file
         self.save_full_text_enabled = save_full_text
-        api_key = os.getenv('OPENAI_API_KEY')
-        self.client = OpenAI(api_key=api_key)
+        api_key = os.getenv('OPENAI_API_KEY')  # Load OpenAI API key from environment variables
+        self.client = OpenAI(api_key=api_key)  # Initialize OpenAI client
 
     def extract_text_from_pdf(self, pdf_path: str, page: str = 'first') -> str:
         """
@@ -36,10 +36,10 @@ class PDFExtractor:
         :return: Extracted text from the specified page of the PDF.
         """
         text = ''
-        with fitz.open(pdf_path) as doc:
-            if page == 'first' and len(doc) > 0:
+        with fitz.open(pdf_path) as doc:  # Open the PDF file
+            if page == 'first' and len(doc) > 0:  # Extract text from the first page
                 text = doc[0].get_text()
-            elif page == 'last' and len(doc) > 0:
+            elif page == 'last' and len(doc) > 0:  # Extract text from the last page
                 text = doc[-1].get_text()
         return text
 
@@ -100,10 +100,10 @@ class PDFExtractor:
         :return: The citation count.
         """
         try:
-            search_query = scholarly.search_pubs(doi)
-            publication = next(search_query, None)
+            search_query = scholarly.search_pubs(doi)  # Search for the publication using DOI
+            publication = next(search_query, None)  # Get the first result
             if publication:
-                return publication["num_citations"]
+                return publication["num_citations"]  # Return the number of citations
             else:
                 print(f"No citation data found for DOI {doi}")
                 return 0
@@ -264,24 +264,24 @@ class PDFExtractor:
         :return: List of dictionaries containing extracted data from each PDF.
         """
         data = []
-        for filename in os.listdir(self.folder_path):
-            if filename.endswith('.pdf'):
-                pdf_path = os.path.join(self.folder_path, filename)
-                text_first = self.extract_text_from_pdf(pdf_path, page='first')
+        for filename in os.listdir(self.folder_path):  # Iterate through all files in the folder
+            if filename.endswith('.pdf'):  # Check if the file is a PDF
+                pdf_path = os.path.join(self.folder_path, filename)  # Get the full path of the PDF
+                text_first = self.extract_text_from_pdf(pdf_path, page='first')  # Extract text from the first page
 
                 # Extract full text from all pages
                 full_text = ''
-                with fitz.open(pdf_path) as doc:
-                    num_pages = len(doc)
-                    for page_num in range(num_pages):
-                        full_text += doc[page_num].get_text()
+                with fitz.open(pdf_path) as doc:  # Open the PDF file
+                    num_pages = len(doc)  # Get the number of pages in the PDF
+                    for page_num in range(num_pages):  # Iterate through all pages
+                        full_text += doc[page_num].get_text()  # Extract text from each page
 
                 # Save full text only if enabled
                 if self.save_full_text_enabled:
-                    self.save_full_text(full_text, filename)
+                    self.save_full_text(full_text, filename)  # Save the full text to a file
 
-                fields = self.extract_fields(text_first, full_text, num_pages)
-                data.append(fields)
+                fields = self.extract_fields(text_first, full_text, num_pages)  # Extract fields from the text
+                data.append(fields)  # Append the extracted fields to the data list
         return data
 
     def save_to_json(self, data: List[Dict[str, str]]):
@@ -292,7 +292,7 @@ class PDFExtractor:
         """
         os.makedirs(os.path.dirname(self.output_file), exist_ok=True)  # Ensure the directory exists
         with open(self.output_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+            json.dump(data, f, ensure_ascii=False, indent=4)  # Save the data to a JSON file
 
     def save_full_text(self, text: str, pdf_filename: str):
         """
@@ -301,23 +301,23 @@ class PDFExtractor:
         :param text: Full text content to save
         :param pdf_filename: Original PDF filename to base the text filename on
         """
-        text_filename = os.path.splitext(pdf_filename)[0] + '.txt'
-        text_filepath = os.path.join(os.path.dirname(self.output_file), text_filename)
+        text_filename = os.path.splitext(pdf_filename)[0] + '.txt'  # Create a text filename based on the PDF filename
+        text_filepath = os.path.join(os.path.dirname(self.output_file), text_filename)  # Get the full path of txt file
 
         with open(text_filepath, 'w', encoding='utf-8') as f:
-            f.write(text)
+            f.write(text)  # Write the full text to the file
 
     def run(self):
         """
         Run the PDF extraction process and save the results to a JSON file.
         """
-        data = self.process_pdfs_in_folder()
-        self.save_to_json(data)
-        print(f"Data extracted and saved to {self.output_file}")
+        data = self.process_pdfs_in_folder()  # Process all PDFs in the folder and extract data
+        self.save_to_json(data)  # Save the extracted data to a JSON file
+        print(f"Data extracted and saved to {self.output_file}")  # Print a message indicating the data has been saved
 
 
 if __name__ == "__main__":
     folder_path = 'data/input'  # Path to the folder containing PDFs
     output_file = 'data/output/extracted_data.json'  # Path to save the JSON file
-    extractor = PDFExtractor(folder_path, output_file)
-    extractor.run()
+    extractor = PDFExtractor(folder_path, output_file)  # Initialize the PDFExtractor
+    extractor.run()  # Run the PDF extraction process
