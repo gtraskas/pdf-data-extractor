@@ -5,7 +5,7 @@ This project is a PDF data extraction tool designed to extract specific fields f
 ## Features
 
 - Extracts metadata such as authors, title, source, document type, keywords, abstract, affiliations, corresponding author, publication year, volume, issue, DOI, and unique article identifier from the first page of a PDF.
-- Extracts references from the entire PDF text.
+- Extracts references from the entire PDF text using regular expressions (re) or GPT.
 - Saves extracted data to a JSON file.
 - Saves full text of the PDF to a text file.
 
@@ -16,6 +16,7 @@ This project is a PDF data extraction tool designed to extract specific fields f
 - OpenAI API key
 - re (Python standard library)
 - scholarly
+- python-dotenv
 
 ## Installation
 
@@ -51,21 +52,14 @@ This project is a PDF data extraction tool designed to extract specific fields f
    python extract_pdf_data.py
    ```
 
-3. The extracted data will be saved to `data/output/extracted_data.csv`.
+3. The extracted data will be saved to `data/output/extracted_data.json`.
 
 ## Customization
 
 - The `extract_fields` function in `extract_pdf_data.py` can be customized to extract additional fields or modify the extraction logic.
+- You can choose to extract references using either regular expressions (re) or GPT by setting the `use_gpt_for_references` flag in the `extract_fields` method.
 
 ## Troubleshooting
 
 - Ensure that your OpenAI API key is correctly set in the `.env` file.
 - If you encounter issues with PDF text extraction, verify that the PDFs are not scanned images, as this tool does not perform OCR.
-
-## Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request with your changes.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
