@@ -13,17 +13,15 @@ load_dotenv()
 
 
 class PDFExtractor:
-    def __init__(self, folder_path: str, output_file: str, save_full_text: bool = False):
+    def __init__(self, folder_path: str, output_file: str):
         """
         Initialize the PDFExtractor with a folder path, output file name, and OpenAI API key.
 
         :param folder_path: Path to the folder containing PDF files.
         :param output_file: Name of the JSON file to save extracted data.
-        :param save_full_text: Flag to enable/disable saving full text files (default: True)
         """
         self.folder_path = folder_path
         self.output_file = output_file
-        self.save_full_text_enabled = save_full_text
         api_key = os.getenv('OPENAI_API_KEY')  # Load OpenAI API key from environment variables
         self.client = OpenAI(api_key=api_key)  # Initialize OpenAI client
 
